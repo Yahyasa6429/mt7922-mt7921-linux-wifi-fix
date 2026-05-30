@@ -1,8 +1,13 @@
-# MT7921/MT7922 stuck at 54 Mbit/s on Linux — the "disabling HT" fix
+# Fix MediaTek MT7921 / MT7922 slow Wi-Fi on Linux ("required MCSes not supported, disabling HT")
 
-**TL;DR** — If your MediaTek Wi-Fi card (MT7921 / MT7922, driver `mt7921e`) connects
-fine but caps out around 10–20 Mbit/s on Linux while Windows gets hundreds of Mbit/s
-to *gigabit* on the same machine and router, and `dmesg` shows:
+> Wi-Fi connects but is stuck at ~10–20 Mbit/s on Linux, while Windows gets
+> hundreds of Mbit/s to gigabit on the **same** laptop/desktop and **same** router.
+> `iw link` shows `54.0 MBit/s` / `20 MHz (no HT)` and `dmesg` says
+> **`required MCSes not supported, disabling HT`**. This repo fixes it.
+
+**TL;DR** — If your MediaTek Wi-Fi card (MT7921 / MT7922 / MT7921e / MT7922e, driver
+`mt7921e`) connects fine but caps out around 10–20 Mbit/s on Linux while Windows gets
+hundreds of Mbit/s to *gigabit* on the same machine and router, and `dmesg` shows:
 
 ```
 wlanX: required MCSes not supported, disabling HT
@@ -115,6 +120,28 @@ sudo ./uninstall.sh
 Removes the hook, deletes the patched module from every kernel's `updates/`, runs
 `depmod`. Stock `mac80211` returns on the next reload/reboot.
 
+## Other distributions (Fedora, Ubuntu/Debian, etc.)
+
+Only `install.sh`, the pacman hook, and `rebuild-mac80211.sh` are Arch-specific. The
+**patch itself is distro-agnostic** — the bug is in the upstream kernel's `mac80211`.
+On any distro you can apply it manually:
+
+```bash
+# 1. install kernel build deps + headers for your *running* kernel
+#    Fedora:  sudo dnf install kernel-devel-$(uname -r) gcc make bc
+#    Debian/Ubuntu: sudo apt install linux-headers-$(uname -r) build-essential bc
+
+# 2. grab matching upstream mac80211 source, patch, build, install
+KVER=$(uname -r); BASE=${KVER%%-*}; MAJ=${BASE%%.*}
+curl -fSLO https://cdn.kernel.org/pub/linux/kernel/v${MAJ}.x/linux-$BASE.tar.xz
+tar xf linux-$BASE.tar.xz linux-$BASE/net/mac80211/
+cd linux-$BASE && patch -p1 < /path/to/skip-basic-mcs-check.patch
+make -C /lib/modules/$KVER/build M=$PWD/net/mac80211 modules
+sudo cp net/mac80211/mac80211.ko /lib/modules/$KVER/updates/ && sudo depmod $KVER
+
+# 3. reload (see below) or reboot
+```
+
 ## Notes & caveats
 
 - The rebuilt module is **out-of-tree tainted** (`OE` in `lsmod`/dmesg). Harmless.
@@ -146,6 +173,17 @@ Removes the hook, deletes the patched module from every kernel's `updates/`, run
 - The mac80211 change that introduced the strict check —
   *"wifi: mac80211: add HT and VHT basic set verification"* (linux-wireless, Feb 2025):
   <https://patchwork.kernel.org/project/linux-wireless/patch/20250204193721.7dfdeb1235bb.I66bcf6c2de3b9d3325e4ffd9f573f4cd26ce5685@changeid/>
+
+## Keywords
+
+For anyone searching: MediaTek MT7921 MT7922 MT7921e MT7922e MT7921K AzureWave
+slow wifi on Linux, wifi stuck at 54 Mbps / 54 Mbit/s, only getting 10-20 Mbps,
+fast on Windows slow on Linux, `mt7921e` low throughput, `required MCSes not
+supported disabling HT`, mac80211 disables HT/VHT/HE, no HT 20 MHz, `iw link`
+54.0 MBit/s, Wi-Fi 6 / 802.11ax / 802.11ac running at 802.11a/g speeds,
+Xfinity / Comcast XB7 XB8 gateway 4x4 AP with 2x2 client, ASUS B650 / B650E /
+TUF / ROG onboard Wi-Fi, Framework / Lenovo / handheld MT7922 slow,
+Arch Linux linux-zen linux-lts, Fedora, Ubuntu, Debian.
 
 ## License
 
