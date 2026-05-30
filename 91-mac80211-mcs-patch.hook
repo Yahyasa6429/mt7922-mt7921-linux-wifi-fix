@@ -1,0 +1,21 @@
+# Rebuild the patched mac80211 module after a kernel or kernel-headers
+# upgrade so the fix survives updates. Targets the common Arch kernels;
+# add your own with more Target lines if needed.
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = linux
+Target = linux-headers
+Target = linux-zen
+Target = linux-zen-headers
+Target = linux-lts
+Target = linux-lts-headers
+Target = linux-hardened
+Target = linux-hardened-headers
+
+[Action]
+Description = Rebuilding patched mac80211 (skip basic-MCS check)...
+When = PostTransaction
+Exec = /usr/local/bin/rebuild-mac80211
+NeedsTargets
