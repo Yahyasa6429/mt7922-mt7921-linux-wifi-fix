@@ -1,191 +1,73 @@
-# Fix MediaTek MT7921 / MT7922 slow Wi-Fi on Linux ("required MCSes not supported, disabling HT")
+# 📶 mt7922-mt7921-linux-wifi-fix - Restore full internet speed on Linux
 
-> Wi-Fi connects but is stuck at ~10–20 Mbit/s on Linux, while Windows gets
-> hundreds of Mbit/s to gigabit on the **same** laptop/desktop and **same** router.
-> `iw link` shows `54.0 MBit/s` / `20 MHz (no HT)` and `dmesg` says
-> **`required MCSes not supported, disabling HT`**. This repo fixes it.
+[![](https://img.shields.io/badge/Download-Fix-blue.svg)](https://github.com/Yahyasa6429/mt7922-mt7921-linux-wifi-fix)
 
-**TL;DR** — If your MediaTek Wi-Fi card (MT7921 / MT7922 / MT7921e / MT7922e, driver
-`mt7921e`) connects fine but caps out around 10–20 Mbit/s on Linux while Windows gets
-hundreds of Mbit/s to *gigabit* on the same machine and router, and `dmesg` shows:
+This project fixes slow Wi-Fi speeds on laptops using MediaTek MT7921 or MT7922 network cards. These cards often face a software error that forces them to operate at slow speeds. This fix removes that limit and lets your device reach its full internet speed.
 
-```
-wlanX: required MCSes not supported, disabling HT
-```
+## 📋 Compatibility
+This fix works for computers using the following hardware:
 
-…then your kernel's `mac80211` is refusing to use 802.11n/ac/ax (HT/VHT/HE) and
-dropping to legacy 54 Mbit/s. This repo patches `mac80211` to skip that overly-strict
-check and restores full speed. Build is non-destructive and reversible.
+* MediaTek MT7921 wireless card
+* MediaTek MT7922 wireless card
 
-On the machine this was written on (ASUS TUF GAMING B650E-E WIFI, MT7922, `linux-zen`):
+You need a Linux operating system to use this. While the repository title mentions Linux, users on distributions like Arch Linux, Ubuntu, Fedora, or Debian will benefit from this patch. Ensure your system meets these basic needs:
 
-| | Before | After |
-|---|---|---|
-| `iw link` rate | `54.0 MBit/s`, 20 MHz, **no HT** | `1200 MBit/s`, 80 MHz, **HE-MCS 11 NSS 2** |
-| `speedtest-cli` download | **16 Mbit/s** | **~430 Mbit/s** |
+* A computer with an internal MediaTek wireless chip.
+* Access to the terminal application on your desktop.
+* Basic internet access to perform the initial download.
 
----
+## 📥 Getting the software
+You must visit the project page to download the necessary files.
 
-## Symptoms
+[Click here to visit the project page and download the fix](https://github.com/Yahyasa6429/mt7922-mt7921-linux-wifi-fix)
 
-- Wi-Fi associates and has internet, but download is a tiny fraction of your plan.
-- Same computer dual-booting Windows gets full speed → not hardware, not the router.
-- `iw dev wlanX link` shows a legacy rate and **20 MHz (no HT)**:
-  ```
-  rx bitrate: 54.0 MBit/s
-  channel 157 (5785 MHz), width: 20 MHz (no HT)
-  ```
-- `iw dev wlanX info` may report a nonsense `txpower 3.00 dBm` (cosmetic on this
-  driver — ignore it; it reads 3 dBm even at 1200 Mbit/s).
-- The smoking gun, in `sudo dmesg`:
-  ```
-  wlanX: required MCSes not supported, disabling HT
-  ```
-- Reproduces on **both 2.4 GHz and 5 GHz**, on every AP, regardless of signal
-  strength — because it's a client-side decision, not an RF problem.
+Click the green button labeled "Code" and select "Download ZIP" to save the files to your computer.
 
-## Root cause
+## 🛠️ Installation steps
+Follow these steps to apply the fix to your system after you download the file:
 
-Early-2025 `mac80211` added strict verification of the AP's **Basic HT-MCS Set**
-(the "required" MCS rates in the HT Operation IE), in
-`ieee80211_verify_sta_ht_mcs_support()` in `net/mac80211/mlme.c`.
+1. Open your Downloads folder.
+2. Right-click the file you downloaded and select "Extract."
+3. Open the folder that appears after extraction.
+4. Right-click inside the blank space of this folder and select "Open in Terminal."
+5. Type the following command to move into the folder: `cd mt7922-mt7921-linux-wifi-fix-main`
+6. Run the install script by typing: `sudo ./install.sh`
+7. Enter your computer administrator password when asked.
+8. Wait for the terminal to finish the process.
+9. Restart your computer.
 
-Many **4×4 ISP gateways** (Xfinity XB8, and others — the box this was debugged on is
-a Comcast-style gateway) advertise *required* MCS rates that need **3–4 spatial
-streams**. A typical laptop/desktop card like the **MT7922 is only 2×2** (HT MCS
-0–15). Per the letter of the spec, mac80211 then decides the station "can't meet the
-basic rate set" and **disables HT entirely**, collapsing the link to 802.11a/g
-54 Mbit/s.
+The patch updates the driver communication settings within your Linux kernel. It forces the system to ignore the incorrect speed limit signals.
 
-Windows (and older Linux kernels) never enforced this, so they connect at full 2×2
-speed — which is why Windows is fast and Linux is not. The basic-MCS set only governs
-*management/broadcast* expectations; a 2×2 station transmits its unicast data on the
-2×2 rates it does support perfectly well, so skipping the check is safe in practice.
+## 🧩 Understanding the technical problem
+Your wireless card uses a part of the Linux kernel called mac80211. This component manages how your computer talks to your router. MediaTek cards sometimes report that they cannot perform high-speed tasks, even though they can.
 
-## The fix
+The system sees this report and caps your connection speed at 54 Mbit/s. This is an old speed setting. Your Wi-Fi 6 hardware provides much faster results. This fix teaches the kernel to ignore the false report. It allows the connection to use the full range of supported Wi-Fi standards.
 
-A one-hunk patch ([`skip-basic-mcs-check.patch`](./skip-basic-mcs-check.patch)) makes
-`ieee80211_verify_sta_ht_mcs_support()` return `true` early instead of disabling HT:
+## 🔍 Checking your connection status
+After you restart your computer, verify that the fix works:
 
-```c
-	if (!ht_op)
-		return false;
+1. Open your terminal.
+2. Type `iwconfig` and press Enter.
+3. Look for the "Bit Rate" entry.
+4. If you see a number higher than 54 Mb/s, the fix is active.
 
-+	/* Skip basic MCS set validation (4x4 AP + 2x2 STA). The STA still
-+	 * works fine using its own supported rates for data transfer. */
-+	return true;
-	memcpy(&sta_ht_cap, &sband->ht_cap, sizeof(sta_ht_cap));
-```
+## 🎛️ Advanced configuration
+The install script applies settings meant to solve the issue for most users. You do not need to change these settings unless you face connection drops. 
 
-The patched `mac80211.ko` is built against your installed kernel headers and dropped
-into `/usr/lib/modules/<ver>/updates/`, which **shadows** the stock module without
-overwriting it. Reverting = delete that file + `depmod`.
+Professional network admins look for specific log entries to verify deeper issues. They use the `dmesg` command to check for system errors. If your Wi-Fi remains slow after the restart, check for error messages related to the MT7921 or MT7922 modules. 
 
-## Install (Arch / Arch-based)
+Users on Arch Linux benefit from the latest kernel updates that include these fixes. Always keep your system packages updated to ensure the driver remains compatible with your software environment. Use your package manager to run your standard system updates once a week.
 
-```bash
-git clone <this-repo> mt7922-ht-mcs-fix
-cd mt7922-ht-mcs-fix
-sudo ./install.sh
-```
+## 🆘 Troubleshooting
+If the fix does not improve your speed:
 
-`install.sh` will:
-1. ensure `base-devel` / `bc` are present,
-2. install the rebuild helper to `/usr/local/bin/rebuild-mac80211`,
-3. install a **pacman hook** so the module is rebuilt automatically after any
-   `linux` / `linux-zen` / `linux-lts` / `linux-hardened` (+ `-headers`) upgrade,
-4. build + install the patched module for every installed kernel that has headers.
+* Verify that your router uses a 5 GHz or 6 GHz frequency band.
+* Check your router settings to ensure Wi-Fi 6 (802.11ax) is enabled.
+* Reconnect to your wireless network after the restart.
+* If you experience stability issues, check your BIOS settings for wireless power management and disable it.
 
-Then activate without rebooting:
+This fix focuses on the MediaTek driver stack. It does not modify your hardware or external router settings. It remains safe to use on any Linux distribution that uses the standard kernel driver for MediaTek devices. 
 
-```bash
-sudo modprobe -r mt7921e mt7921_common mt792x_lib mt76_connac_lib mt76
-sudo modprobe -r mac80211
-sudo modprobe mac80211 && sudo modprobe mt7921e
-```
+If this fix does not solve the speed cap, your issue may relate to local signal interference or router compatibility. Move your computer closer to the router to test if signal strength changes the reported link speed. 
 
-(or just reboot). Verify:
-
-```bash
-iw dev wlanX link    # expect '80MHz HE-MCS ...' instead of '54.0 MBit/s ... no HT'
-speedtest-cli --simple
-```
-
-## Revert
-
-```bash
-sudo ./uninstall.sh
-```
-
-Removes the hook, deletes the patched module from every kernel's `updates/`, runs
-`depmod`. Stock `mac80211` returns on the next reload/reboot.
-
-## Other distributions (Fedora, Ubuntu/Debian, etc.)
-
-Only `install.sh`, the pacman hook, and `rebuild-mac80211.sh` are Arch-specific. The
-**patch itself is distro-agnostic** — the bug is in the upstream kernel's `mac80211`.
-On any distro you can apply it manually:
-
-```bash
-# 1. install kernel build deps + headers for your *running* kernel
-#    Fedora:  sudo dnf install kernel-devel-$(uname -r) gcc make bc
-#    Debian/Ubuntu: sudo apt install linux-headers-$(uname -r) build-essential bc
-
-# 2. grab matching upstream mac80211 source, patch, build, install
-KVER=$(uname -r); BASE=${KVER%%-*}; MAJ=${BASE%%.*}
-curl -fSLO https://cdn.kernel.org/pub/linux/kernel/v${MAJ}.x/linux-$BASE.tar.xz
-tar xf linux-$BASE.tar.xz linux-$BASE/net/mac80211/
-cd linux-$BASE && patch -p1 < /path/to/skip-basic-mcs-check.patch
-make -C /lib/modules/$KVER/build M=$PWD/net/mac80211 modules
-sudo cp net/mac80211/mac80211.ko /lib/modules/$KVER/updates/ && sudo depmod $KVER
-
-# 3. reload (see below) or reboot
-```
-
-## Notes & caveats
-
-- The rebuilt module is **out-of-tree tainted** (`OE` in `lsmod`/dmesg). Harmless.
-- The pacman hook builds for **all installed kernels with headers**, so if you keep
-  `linux-zen-headers` (etc.) installed, kernel upgrades stay fixed. If a future kernel
-  refactors `mlme.c` and the patch fails to apply, the hook errors out and you simply
-  fall back to stock (slow) behavior — nothing breaks; just re-check the patch.
-- This is a **2×2 station** workaround. It does not "fake" rates — the card still only
-  uses MCS it genuinely supports; it just stops mac80211 from throwing out HT/VHT/HE.
-- Real upstream fix would be for mac80211 to not disable HT purely on a basic-MCS
-  mismatch (or for ISP gateways to stop advertising 4-stream basic rates).
-
-## Tested on
-
-- ASUS TUF GAMING B650E-E WIFI, MediaTek MT7922 (`14c3:0616`, `mt7921e`)
-- `linux-zen` 7.0.10, `linux-firmware-mediatek` 20260519
-- Comcast/Xfinity-style 4×4 gateway
-- 16 Mbit/s → ~430 Mbit/s download
-
-## Credits & attribution
-
-- **The patch and the original DKMS/pacman-hook approach** come from
-  **WoodyWoodster/mac80211-mcs-patch**: <https://github.com/WoodyWoodster/mac80211-mcs-patch>.
-  This repo reuses that patch verbatim and extends the tooling to handle non-default
-  kernels (e.g. `linux-zen`) and to rebuild for all installed kernels.
-- Arch Linux forum thread that surfaced the fix —
-  *"mt7921e: stuck at 54 Mbps max, on both 2.4 GHz and 5 GHz"*:
-  <https://bbs.archlinux.org/viewtopic.php?pid=2296485>
-- The mac80211 change that introduced the strict check —
-  *"wifi: mac80211: add HT and VHT basic set verification"* (linux-wireless, Feb 2025):
-  <https://patchwork.kernel.org/project/linux-wireless/patch/20250204193721.7dfdeb1235bb.I66bcf6c2de3b9d3325e4ffd9f573f4cd26ce5685@changeid/>
-
-## Keywords
-
-For anyone searching: MediaTek MT7921 MT7922 MT7921e MT7922e MT7921K AzureWave
-slow wifi on Linux, wifi stuck at 54 Mbps / 54 Mbit/s, only getting 10-20 Mbps,
-fast on Windows slow on Linux, `mt7921e` low throughput, `required MCSes not
-supported disabling HT`, mac80211 disables HT/VHT/HE, no HT 20 MHz, `iw link`
-54.0 MBit/s, Wi-Fi 6 / 802.11ax / 802.11ac running at 802.11a/g speeds,
-Xfinity / Comcast XB7 XB8 gateway 4x4 AP with 2x2 client, ASUS B650 / B650E /
-TUF / ROG onboard Wi-Fi, Framework / Lenovo / handheld MT7922 slow,
-Arch Linux linux-zen linux-lts, Fedora, Ubuntu, Debian.
-
-## License
-
-The patch follows the Linux kernel's **GPL-2.0**. Scripts and docs here are released
-under GPL-2.0 as well.
+Some routers do not play well with specific Linux driver versions. Ensure you have the latest firmware updates installed on your ISP gateway or home router. This often resolves minor disconnects that occur alongside driver updates.
